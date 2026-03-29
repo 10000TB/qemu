@@ -32,6 +32,7 @@
 #include "hw/mem/memory-device.h"
 #include "hw/intc/intc.h"
 #include "migration/misc.h"
+#include "hw/rdma/rdma.h"
 
 NameInfo *qmp_query_name(Error **errp)
 {

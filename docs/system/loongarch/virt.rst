@@ -40,7 +40,13 @@ can be accessed by following steps.
 
 .. code-block:: bash
 
-  ./configure --target-list="loongarch64-softmmu"
+  ./configure --disable-rdma --disable-pvrdma --prefix=/usr \
+              --target-list="loongarch64-softmmu" \
+              --disable-libiscsi --disable-libnfs --disable-libpmem \
+              --disable-glusterfs --enable-libusb --enable-usb-redir \
+              --disable-opengl --disable-xen --enable-spice \
+              --enable-debug --disable-capstone --disable-kvm \
+              --enable-profiler
   make -j8
 
 (2) Set cross tools:

@@ -44,6 +44,9 @@ config VHOST_KERNEL
 config VIRTFS
     bool
 
+config PVRDMA
+    bool
+
 config MULTIPROCESS_ALLOWED
     bool
     imply MULTIPROCESS
