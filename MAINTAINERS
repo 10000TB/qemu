@@ -4416,7 +4416,7 @@ F: docs/block-replication.txt
 PVRDMA
 M: Yuval Shaia <yuval.shaia.ml@gmail.com>
 M: Marcel Apfelbaum <marcel.apfelbaum@gmail.com>
-S: Odd Fixes
+S: Maintained
 F: hw/rdma/*
 F: hw/rdma/vmw/*
 F: docs/pvrdma.txt
