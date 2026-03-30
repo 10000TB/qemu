@@ -31,7 +31,7 @@ typedef struct RdmaBackendThread {
 } RdmaBackendThread;
 
 typedef struct RdmaCmMux {
-    CharBackend *chr_be;
+    CharFrontend *chr_be;
     int can_receive;
 } RdmaCmMux;
 

@@ -94,7 +94,7 @@ struct PVRDMADev {
     uint8_t backend_port_num;
     RdmaBackendDev backend_dev;
     RdmaDeviceResources rdma_dev_res;
-    CharBackend mad_chr;
+    CharFrontend mad_chr;
     VMXNET3State *func0;
     Notifier shutdown_notifier;
     PVRDMADevStats stats;

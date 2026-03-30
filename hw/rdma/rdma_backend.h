@@ -59,7 +59,7 @@ int rdma_backend_init(RdmaBackendDev *backend_dev, PCIDevice *pdev,
                       RdmaDeviceResources *rdma_dev_res,
                       const char *backend_device_name, uint8_t port_num,
                       struct ibv_device_attr *dev_attr,
-                      CharBackend *mad_chr_be);
+                      CharFrontend *mad_chr_be);
 void rdma_backend_fini(RdmaBackendDev *backend_dev);
 int rdma_backend_add_gid(RdmaBackendDev *backend_dev, const char *ifname,
                          union ibv_gid *gid);

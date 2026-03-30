@@ -208,7 +208,7 @@ static inline int rdmacm_mux_can_process_async(RdmaBackendDev *backend_dev)
     return qatomic_read(&backend_dev->rdmacm_mux.can_receive);
 }
 
-static int rdmacm_mux_check_op_status(CharBackend *mad_chr_be)
+static int rdmacm_mux_check_op_status(CharFrontend *mad_chr_be)
 {
     RdmaCmMuxMsg msg = {};
     int ret;
@@ -1173,7 +1173,7 @@ static void rdmacm_mux_read(void *opaque, const uint8_t *buf, int size)
     process_incoming_mad_req(backend_dev, msg);
 }
 
-static int mad_init(RdmaBackendDev *backend_dev, CharBackend *mad_chr_be)
+static int mad_init(RdmaBackendDev *backend_dev, CharFrontend *mad_chr_be)
 {
     int ret;
 
@@ -1282,7 +1282,7 @@ int rdma_backend_del_gid(RdmaBackendDev *backend_dev, const char *ifname,
 int rdma_backend_init(RdmaBackendDev *backend_dev, PCIDevice *pdev,
                       RdmaDeviceResources *rdma_dev_res,
                       const char *backend_device_name, uint8_t port_num,
-                      struct ibv_device_attr *dev_attr, CharBackend *mad_chr_be)
+                      struct ibv_device_attr *dev_attr, CharFrontend *mad_chr_be)
 {
     int i;
     int ret = 0;
