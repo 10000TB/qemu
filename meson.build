@@ -3133,8 +3133,9 @@ config_host_data.set('CONFIG_ARM_AES_BUILTIN', cc.compiles('''
 
 have_pvrdma = get_option('pvrdma') \
   .require(rdma.found(), error_message: 'PVRDMA requires OpenFabrics libraries') \
-  .require(cc.compiles(gnu_source_prefix + '''
-    #include <sys/mman.h>
+  .require(cc.compiles('''
+    #define _GNU_SOURCE         /* See feature_test_macros(7) */
+    #include <sys/mman.h> 
     int main(void)
     {
       char buf = 0;
