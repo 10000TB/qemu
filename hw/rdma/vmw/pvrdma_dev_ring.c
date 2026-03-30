@@ -17,6 +17,7 @@
 #include "hw/pci/pci.h"
 #include "cpu.h"
 #include "qemu/cutils.h"
+#include "exec/target_page.h"
 
 #include "trace.h"
 
@@ -48,20 +49,20 @@ int pvrdma_ring_init(PvrdmaRing *ring, const char *name, PCIDevice *dev,
             continue;
         }
 
-        ring->pages[i] = rdma_pci_dma_map(dev, tbl[i], TARGET_PAGE_SIZE);
+        ring->pages[i] = rdma_pci_dma_map(dev, tbl[i], qemu_target_page_size());
         if (!ring->pages[i]) {
             rc = -ENOMEM;
             rdma_error_report("Failed to map to page %d in ring %s", i, name);
             goto out_free;
         }
-        memset(ring->pages[i], 0, TARGET_PAGE_SIZE);
+        memset(ring->pages[i], 0, qemu_target_page_size());
     }
 
     goto out;
 
 out_free:
     while (i--) {
-        rdma_pci_dma_unmap(dev, ring->pages[i], TARGET_PAGE_SIZE);
+        rdma_pci_dma_unmap(dev, ring->pages[i], qemu_target_page_size());
     }
     g_free(ring->pages);
 
@@ -84,7 +85,7 @@ void *pvrdma_ring_next_elem_read(PvrdmaRing *ring)
 
     idx = head & (ring->max_elems - 1);
     offset = idx * ring->elem_sz;
-    return ring->pages[offset / TARGET_PAGE_SIZE] + (offset % TARGET_PAGE_SIZE);
+    return ring->pages[offset / qemu_target_page_size()] + (offset % qemu_target_page_size());
 }
 
 void pvrdma_ring_read_inc(PvrdmaRing *ring)
@@ -110,7 +111,7 @@ void *pvrdma_ring_next_elem_write(PvrdmaRing *ring)
 
     idx = tail & (ring->max_elems - 1);
     offset = idx * ring->elem_sz;
-    return ring->pages[offset / TARGET_PAGE_SIZE] + (offset % TARGET_PAGE_SIZE);
+    return ring->pages[offset / qemu_target_page_size()] + (offset % qemu_target_page_size());
 }
 
 void pvrdma_ring_write_inc(PvrdmaRing *ring)
@@ -133,7 +134,7 @@ void pvrdma_ring_free(PvrdmaRing *ring)
 
     while (ring->npages--) {
         rdma_pci_dma_unmap(ring->dev, ring->pages[ring->npages],
-                           TARGET_PAGE_SIZE);
+                           qemu_target_page_size());
     }
 
     g_free(ring->pages);

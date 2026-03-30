@@ -17,6 +17,7 @@
 #include "cpu.h"
 #include "hw/pci/pci.h"
 #include "hw/pci/pci_ids.h"
+#include "exec/target_page.h"
 
 #include "../rdma_backend.h"
 #include "../rdma_rm.h"
@@ -38,26 +39,26 @@ static void *pvrdma_map_to_pdir(PCIDevice *pdev, uint64_t pdir_dma,
         return NULL;
     }
 
-    length = ROUND_UP(length, TARGET_PAGE_SIZE);
-    if (nchunks * TARGET_PAGE_SIZE != length) {
+    length = ROUND_UP(length, qemu_target_page_size());
+    if (nchunks * qemu_target_page_size() != length) {
         rdma_error_report("Invalid nchunks/length (%u, %lu)", nchunks,
                           (unsigned long)length);
         return NULL;
     }
 
-    dir = rdma_pci_dma_map(pdev, pdir_dma, TARGET_PAGE_SIZE);
+    dir = rdma_pci_dma_map(pdev, pdir_dma, qemu_target_page_size());
     if (!dir) {
         rdma_error_report("Failed to map to page directory");
         return NULL;
     }
 
-    tbl = rdma_pci_dma_map(pdev, dir[0], TARGET_PAGE_SIZE);
+    tbl = rdma_pci_dma_map(pdev, dir[0], qemu_target_page_size());
     if (!tbl) {
         rdma_error_report("Failed to map to page table 0");
         goto out_unmap_dir;
     }
 
-    curr_page = rdma_pci_dma_map(pdev, (dma_addr_t)tbl[0], TARGET_PAGE_SIZE);
+    curr_page = rdma_pci_dma_map(pdev, (dma_addr_t)tbl[0], qemu_target_page_size());
     if (!curr_page) {
         rdma_error_report("Failed to map the page 0");
         goto out_unmap_tbl;
@@ -71,17 +72,17 @@ static void *pvrdma_map_to_pdir(PCIDevice *pdev, uint64_t pdir_dma,
     }
     trace_pvrdma_map_to_pdir_host_virt(curr_page, host_virt);
 
-    rdma_pci_dma_unmap(pdev, curr_page, TARGET_PAGE_SIZE);
+    rdma_pci_dma_unmap(pdev, curr_page, qemu_target_page_size());
 
     dir_idx = 0;
     tbl_idx = 1;
     addr_idx = 1;
     while (addr_idx < nchunks) {
-        if (tbl_idx == TARGET_PAGE_SIZE / sizeof(uint64_t)) {
+        if (tbl_idx == qemu_target_page_size() / sizeof(uint64_t)) {
             tbl_idx = 0;
             dir_idx++;
-            rdma_pci_dma_unmap(pdev, tbl, TARGET_PAGE_SIZE);
-            tbl = rdma_pci_dma_map(pdev, dir[dir_idx], TARGET_PAGE_SIZE);
+            rdma_pci_dma_unmap(pdev, tbl, qemu_target_page_size());
+            tbl = rdma_pci_dma_map(pdev, dir[dir_idx], qemu_target_page_size());
             if (!tbl) {
                 rdma_error_report("Failed to map to page table %d", dir_idx);
                 goto out_unmap_host_virt;
@@ -89,20 +90,20 @@ static void *pvrdma_map_to_pdir(PCIDevice *pdev, uint64_t pdir_dma,
         }
 
         curr_page = rdma_pci_dma_map(pdev, (dma_addr_t)tbl[tbl_idx],
-                                     TARGET_PAGE_SIZE);
+                                     qemu_target_page_size());
         if (!curr_page) {
             rdma_error_report("Failed to map to page %d, dir %d", tbl_idx,
                               dir_idx);
             goto out_unmap_host_virt;
         }
 
-        mremap(curr_page, 0, TARGET_PAGE_SIZE, MREMAP_MAYMOVE | MREMAP_FIXED,
-               host_virt + TARGET_PAGE_SIZE * addr_idx);
+        mremap(curr_page, 0, qemu_target_page_size(), MREMAP_MAYMOVE | MREMAP_FIXED,
+               host_virt + qemu_target_page_size() * addr_idx);
 
         trace_pvrdma_map_to_pdir_next_page(addr_idx, curr_page, host_virt +
-                                           TARGET_PAGE_SIZE * addr_idx);
+                                           qemu_target_page_size() * addr_idx);
 
-        rdma_pci_dma_unmap(pdev, curr_page, TARGET_PAGE_SIZE);
+        rdma_pci_dma_unmap(pdev, curr_page, qemu_target_page_size());
 
         addr_idx++;
 
@@ -116,10 +117,10 @@ out_unmap_host_virt:
     host_virt = NULL;
 
 out_unmap_tbl:
-    rdma_pci_dma_unmap(pdev, tbl, TARGET_PAGE_SIZE);
+    rdma_pci_dma_unmap(pdev, tbl, qemu_target_page_size());
 
 out_unmap_dir:
-    rdma_pci_dma_unmap(pdev, dir, TARGET_PAGE_SIZE);
+    rdma_pci_dma_unmap(pdev, dir, qemu_target_page_size());
 
     return host_virt;
 }
@@ -255,13 +256,13 @@ static int create_cq_ring(PCIDevice *pci_dev , PvrdmaRing **ring,
         return rc;
     }
 
-    dir = rdma_pci_dma_map(pci_dev, pdir_dma, TARGET_PAGE_SIZE);
+    dir = rdma_pci_dma_map(pci_dev, pdir_dma, qemu_target_page_size());
     if (!dir) {
         rdma_error_report("Failed to map to CQ page directory");
         goto out;
     }
 
-    tbl = rdma_pci_dma_map(pci_dev, dir[0], TARGET_PAGE_SIZE);
+    tbl = rdma_pci_dma_map(pci_dev, dir[0], qemu_target_page_size());
     if (!tbl) {
         rdma_error_report("Failed to map to CQ page table");
         goto out;
@@ -270,7 +271,7 @@ static int create_cq_ring(PCIDevice *pci_dev , PvrdmaRing **ring,
     r = g_malloc(sizeof(*r));
     *ring = r;
 
-    r->ring_state = rdma_pci_dma_map(pci_dev, tbl[0], TARGET_PAGE_SIZE);
+    r->ring_state = rdma_pci_dma_map(pci_dev, tbl[0], qemu_target_page_size());
 
     if (!r->ring_state) {
         rdma_error_report("Failed to map to CQ ring state");
@@ -290,14 +291,14 @@ static int create_cq_ring(PCIDevice *pci_dev , PvrdmaRing **ring,
 
 out_unmap_ring_state:
     /* ring_state was in slot 1, not 0 so need to jump back */
-    rdma_pci_dma_unmap(pci_dev, --r->ring_state, TARGET_PAGE_SIZE);
+    rdma_pci_dma_unmap(pci_dev, --r->ring_state, qemu_target_page_size());
 
 out_free_ring:
     g_free(r);
 
 out:
-    rdma_pci_dma_unmap(pci_dev, tbl, TARGET_PAGE_SIZE);
-    rdma_pci_dma_unmap(pci_dev, dir, TARGET_PAGE_SIZE);
+    rdma_pci_dma_unmap(pci_dev, tbl, qemu_target_page_size());
+    rdma_pci_dma_unmap(pci_dev, dir, qemu_target_page_size());
 
     return rc;
 }
@@ -306,7 +307,7 @@ static void destroy_cq_ring(PvrdmaRing *ring)
 {
     pvrdma_ring_free(ring);
     /* ring_state was in slot 1, not 0 so need to jump back */
-    rdma_pci_dma_unmap(ring->dev, --ring->ring_state, TARGET_PAGE_SIZE);
+    rdma_pci_dma_unmap(ring->dev, --ring->ring_state, qemu_target_page_size());
     g_free(ring);
 }
 
@@ -383,13 +384,13 @@ static int create_qp_rings(PCIDevice *pci_dev, uint64_t pdir_dma,
         return rc;
     }
 
-    dir = rdma_pci_dma_map(pci_dev, pdir_dma, TARGET_PAGE_SIZE);
+    dir = rdma_pci_dma_map(pci_dev, pdir_dma, qemu_target_page_size());
     if (!dir) {
         rdma_error_report("Failed to map to QP page directory");
         goto out;
     }
 
-    tbl = rdma_pci_dma_map(pci_dev, dir[0], TARGET_PAGE_SIZE);
+    tbl = rdma_pci_dma_map(pci_dev, dir[0], qemu_target_page_size());
     if (!tbl) {
         rdma_error_report("Failed to map to QP page table");
         goto out;
@@ -405,7 +406,7 @@ static int create_qp_rings(PCIDevice *pci_dev, uint64_t pdir_dma,
     *rings = sr;
 
     /* Create send ring */
-    sr->ring_state = rdma_pci_dma_map(pci_dev, tbl[0], TARGET_PAGE_SIZE);
+    sr->ring_state = rdma_pci_dma_map(pci_dev, tbl[0], qemu_target_page_size());
     if (!sr->ring_state) {
         rdma_error_report("Failed to map to QP ring state");
         goto out_free_sr_mem;
@@ -441,14 +442,14 @@ out_free_sr:
     pvrdma_ring_free(sr);
 
 out_unmap_ring_state:
-    rdma_pci_dma_unmap(pci_dev, sr->ring_state, TARGET_PAGE_SIZE);
+    rdma_pci_dma_unmap(pci_dev, sr->ring_state, qemu_target_page_size());
 
 out_free_sr_mem:
     g_free(sr);
 
 out:
-    rdma_pci_dma_unmap(pci_dev, tbl, TARGET_PAGE_SIZE);
-    rdma_pci_dma_unmap(pci_dev, dir, TARGET_PAGE_SIZE);
+    rdma_pci_dma_unmap(pci_dev, tbl, qemu_target_page_size());
+    rdma_pci_dma_unmap(pci_dev, dir, qemu_target_page_size());
 
     return rc;
 }
@@ -460,7 +461,7 @@ static void destroy_qp_rings(PvrdmaRing *ring, uint8_t is_srq)
         pvrdma_ring_free(&ring[1]);
     }
 
-    rdma_pci_dma_unmap(ring->dev, ring->ring_state, TARGET_PAGE_SIZE);
+    rdma_pci_dma_unmap(ring->dev, ring->ring_state, qemu_target_page_size());
     g_free(ring);
 }
 
@@ -616,13 +617,13 @@ static int create_srq_ring(PCIDevice *pci_dev, PvrdmaRing **ring,
         return rc;
     }
 
-    dir = rdma_pci_dma_map(pci_dev, pdir_dma, TARGET_PAGE_SIZE);
+    dir = rdma_pci_dma_map(pci_dev, pdir_dma, qemu_target_page_size());
     if (!dir) {
         rdma_error_report("Failed to map to SRQ page directory");
         goto out;
     }
 
-    tbl = rdma_pci_dma_map(pci_dev, dir[0], TARGET_PAGE_SIZE);
+    tbl = rdma_pci_dma_map(pci_dev, dir[0], qemu_target_page_size());
     if (!tbl) {
         rdma_error_report("Failed to map to SRQ page table");
         goto out;
@@ -631,7 +632,7 @@ static int create_srq_ring(PCIDevice *pci_dev, PvrdmaRing **ring,
     r = g_malloc(sizeof(*r));
     *ring = r;
 
-    r->ring_state = rdma_pci_dma_map(pci_dev, tbl[0], TARGET_PAGE_SIZE);
+    r->ring_state = rdma_pci_dma_map(pci_dev, tbl[0], qemu_target_page_size());
     if (!r->ring_state) {
         rdma_error_report("Failed to map tp SRQ ring state");
         goto out_free_ring_mem;
@@ -649,14 +650,14 @@ static int create_srq_ring(PCIDevice *pci_dev, PvrdmaRing **ring,
     goto out;
 
 out_unmap_ring_state:
-    rdma_pci_dma_unmap(pci_dev, r->ring_state, TARGET_PAGE_SIZE);
+    rdma_pci_dma_unmap(pci_dev, r->ring_state, qemu_target_page_size());
 
 out_free_ring_mem:
     g_free(r);
 
 out:
-    rdma_pci_dma_unmap(pci_dev, tbl, TARGET_PAGE_SIZE);
-    rdma_pci_dma_unmap(pci_dev, dir, TARGET_PAGE_SIZE);
+    rdma_pci_dma_unmap(pci_dev, tbl, qemu_target_page_size());
+    rdma_pci_dma_unmap(pci_dev, dir, qemu_target_page_size());
 
     return rc;
 }
@@ -664,7 +665,7 @@ out:
 static void destroy_srq_ring(PvrdmaRing *ring)
 {
     pvrdma_ring_free(ring);
-    rdma_pci_dma_unmap(ring->dev, ring->ring_state, TARGET_PAGE_SIZE);
+    rdma_pci_dma_unmap(ring->dev, ring->ring_state, qemu_target_page_size());
     g_free(ring);
 }
 

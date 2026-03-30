@@ -17,6 +17,7 @@
 #include "qapi/error.h"
 #include "cpu.h"
 #include "monitor/monitor.h"
+#include "exec/target_page.h"
 
 #include "trace.h"
 #include "rdma_utils.h"
@@ -220,7 +221,7 @@ int rdma_rm_alloc_mr(RdmaDeviceResources *dev_res, uint32_t pd_handle,
         mr->virt = host_virt;
         mr->start = guest_start;
         mr->length = guest_length;
-        mr->virt += (mr->start & (TARGET_PAGE_SIZE - 1));
+        mr->virt += (mr->start & (qemu_target_page_size() - 1));
 
         ret = rdma_backend_create_mr(&mr->backend_mr, &pd->backend_pd, mr->virt,
                                      mr->length, guest_start, access_flags);
@@ -261,7 +262,7 @@ void rdma_rm_dealloc_mr(RdmaDeviceResources *dev_res, uint32_t mr_handle)
         rdma_backend_destroy_mr(&mr->backend_mr);
         trace_rdma_rm_dealloc_mr(mr_handle, mr->start);
         if (mr->start) {
-            mr->virt -= (mr->start & (TARGET_PAGE_SIZE - 1));
+            mr->virt -= (mr->start & (qemu_target_page_size() - 1));
             munmap(mr->virt, mr->length);
         }
         rdma_res_tbl_dealloc(&dev_res->mr_tbl, mr_handle);
