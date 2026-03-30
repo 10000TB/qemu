@@ -18,7 +18,7 @@
 #define RDMA_UTILS_H
 
 #include "qemu/error-report.h"
-#include "sysemu/dma.h"
+#include "system/dma.h"
 
 #define rdma_error_report(fmt, ...) \
     error_report("%s: " fmt, "rdma", ## __VA_ARGS__)
