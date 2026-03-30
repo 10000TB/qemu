@@ -22,10 +22,12 @@
 #include "hw/pci/msix.h"
 #include "hw/core/qdev-properties.h"
 #include "hw/core/qdev-properties-system.h"
+#include "qom/object.h"
 #include "cpu.h"
 #include "trace.h"
 #include "monitor/monitor.h"
 #include "hw/rdma/rdma.h"
+#include "exec/target_page.h"
 
 #include "../rdma_rm.h"
 #include "../rdma_backend.h"
@@ -38,7 +40,7 @@
 #include "standard-headers/drivers/infiniband/hw/vmw_pvrdma/pvrdma_dev_api.h"
 #include "pvrdma_qp_ops.h"
 
-static Property pvrdma_dev_properties[] = {
+static const Property pvrdma_dev_properties[] = {
     DEFINE_PROP_STRING("netdev", PVRDMADev, backend_eth_device_name),
     DEFINE_PROP_STRING("ibdev", PVRDMADev, backend_device_name),
     DEFINE_PROP_UINT8("ibport", PVRDMADev, backend_port_num, 1),
@@ -55,7 +57,7 @@ static Property pvrdma_dev_properties[] = {
     DEFINE_PROP_INT32("dev-caps-max-ah", PVRDMADev, dev_attr.max_ah, MAX_AH),
     DEFINE_PROP_INT32("dev-caps-max-srq", PVRDMADev, dev_attr.max_srq, MAX_SRQ),
     DEFINE_PROP_CHR("mad-chardev", PVRDMADev, mad_chr),
-    DEFINE_PROP_END_OF_LIST(),
+    { /* end of list */ },
 };
 
 static void pvrdma_format_statistics(RdmaProvider *obj, GString *buf)
@@ -83,7 +85,7 @@ static void free_dev_ring(PCIDevice *pci_dev, PvrdmaRing *ring,
                           void *ring_state)
 {
     pvrdma_ring_free(ring);
-    rdma_pci_dma_unmap(pci_dev, ring_state, TARGET_PAGE_SIZE);
+    rdma_pci_dma_unmap(pci_dev, ring_state, qemu_target_page_size());
 }
 
 static int init_dev_ring(PvrdmaRing *ring, PvrdmaRingState **ring_state,
@@ -100,17 +102,17 @@ static int init_dev_ring(PvrdmaRing *ring, PvrdmaRingState **ring_state,
 
     /*
      * Make sure we can satisfy the requested number of pages in a single
-     * TARGET_PAGE_SIZE sized page table (taking into account that first entry
+     * qemu_target_page_size() sized page table (taking into account that first entry
      * is reserved for ring-state)
      */
-    max_pages = TARGET_PAGE_SIZE / sizeof(dma_addr_t) - 1;
+    max_pages = qemu_target_page_size() / sizeof(dma_addr_t) - 1;
     if (num_pages > max_pages) {
         rdma_error_report("Maximum pages on a single directory must not exceed %d\n",
                           max_pages);
         return -EINVAL;
     }
 
-    dir = rdma_pci_dma_map(pci_dev, dir_addr, TARGET_PAGE_SIZE);
+    dir = rdma_pci_dma_map(pci_dev, dir_addr, qemu_target_page_size());
     if (!dir) {
         rdma_error_report("Failed to map to page directory (ring %s)", name);
         rc = -ENOMEM;
@@ -118,14 +120,14 @@ static int init_dev_ring(PvrdmaRing *ring, PvrdmaRingState **ring_state,
     }
 
     /* We support only one page table for a ring */
-    tbl = rdma_pci_dma_map(pci_dev, dir[0], TARGET_PAGE_SIZE);
+    tbl = rdma_pci_dma_map(pci_dev, dir[0], qemu_target_page_size());
     if (!tbl) {
         rdma_error_report("Failed to map to page table (ring %s)", name);
         rc = -ENOMEM;
         goto out_free_dir;
     }
 
-    *ring_state = rdma_pci_dma_map(pci_dev, tbl[0], TARGET_PAGE_SIZE);
+    *ring_state = rdma_pci_dma_map(pci_dev, tbl[0], qemu_target_page_size());
     if (!*ring_state) {
         rdma_error_report("Failed to map to ring state (ring %s)", name);
         rc = -ENOMEM;
@@ -135,7 +137,7 @@ static int init_dev_ring(PvrdmaRing *ring, PvrdmaRingState **ring_state,
     (*ring_state)++;
     rc = pvrdma_ring_init(ring, name, pci_dev,
                           (PvrdmaRingState *)*ring_state,
-                          (num_pages - 1) * TARGET_PAGE_SIZE /
+                          (num_pages - 1) * qemu_target_page_size() /
                           sizeof(struct pvrdma_cqne),
                           sizeof(struct pvrdma_cqne),
                           (dma_addr_t *)&tbl[1], (dma_addr_t)num_pages - 1);
@@ -147,13 +149,13 @@ static int init_dev_ring(PvrdmaRing *ring, PvrdmaRingState **ring_state,
     goto out_free_tbl;
 
 out_free_ring_state:
-    rdma_pci_dma_unmap(pci_dev, *ring_state, TARGET_PAGE_SIZE);
+    rdma_pci_dma_unmap(pci_dev, *ring_state, qemu_target_page_size());
 
 out_free_tbl:
-    rdma_pci_dma_unmap(pci_dev, tbl, TARGET_PAGE_SIZE);
+    rdma_pci_dma_unmap(pci_dev, tbl, qemu_target_page_size());
 
 out_free_dir:
-    rdma_pci_dma_unmap(pci_dev, dir, TARGET_PAGE_SIZE);
+    rdma_pci_dma_unmap(pci_dev, dir, qemu_target_page_size());
 
 out:
     return rc;
@@ -569,23 +571,23 @@ static void init_regs(PCIDevice *pdev)
 
 static void init_dev_caps(PVRDMADev *dev)
 {
-    size_t pg_tbl_bytes = TARGET_PAGE_SIZE *
-                          (TARGET_PAGE_SIZE / sizeof(uint64_t));
+    size_t pg_tbl_bytes = qemu_target_page_size() *
+                          (qemu_target_page_size() / sizeof(uint64_t));
     size_t wr_sz = MAX(sizeof(struct pvrdma_sq_wqe_hdr),
                        sizeof(struct pvrdma_rq_wqe_hdr));
 
     dev->dev_attr.max_qp_wr = pg_tbl_bytes /
                               (wr_sz + sizeof(struct pvrdma_sge) *
-                              dev->dev_attr.max_sge) - TARGET_PAGE_SIZE;
+                              dev->dev_attr.max_sge) - qemu_target_page_size();
                               /* First page is ring state  ^^^^ */
 
     dev->dev_attr.max_cqe = pg_tbl_bytes / sizeof(struct pvrdma_cqe) -
-                            TARGET_PAGE_SIZE; /* First page is ring state */
+                            qemu_target_page_size(); /* First page is ring state */
 
     dev->dev_attr.max_srq_wr = pg_tbl_bytes /
                                 ((sizeof(struct pvrdma_rq_wqe_hdr) +
                                 sizeof(struct pvrdma_sge)) *
-                                dev->dev_attr.max_sge) - TARGET_PAGE_SIZE;
+                                dev->dev_attr.max_sge) - qemu_target_page_size();
 }
 
 static int pvrdma_check_ram_shared(Object *obj, void *opaque)
@@ -618,7 +620,7 @@ static void pvrdma_realize(PCIDevice *pdev, Error **errp)
     rdma_info_report("Initializing device %s %x.%x", pdev->name,
                      PCI_SLOT(pdev->devfn), PCI_FUNC(pdev->devfn));
 
-    if (TARGET_PAGE_SIZE != qemu_real_host_page_size()) {
+    if (qemu_target_page_size() != qemu_real_host_page_size()) {
         error_setg(errp, "Target page size must be the same as host page size");
         return;
     }
@@ -694,7 +696,7 @@ out:
     }
 }
 
-static void pvrdma_class_init(ObjectClass *klass, void *data)
+static void pvrdma_class_init(ObjectClass *klass, const void *data)
 {
     DeviceClass *dc = DEVICE_CLASS(klass);
     PCIDeviceClass *k = PCI_DEVICE_CLASS(klass);
