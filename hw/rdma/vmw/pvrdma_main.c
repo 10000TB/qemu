@@ -40,7 +40,7 @@
 #include "standard-headers/drivers/infiniband/hw/vmw_pvrdma/pvrdma_dev_api.h"
 #include "pvrdma_qp_ops.h"
 
-static const Property pvrdma_dev_properties[] = {
+static Property pvrdma_dev_properties[] = {
     DEFINE_PROP_STRING("netdev", PVRDMADev, backend_eth_device_name),
     DEFINE_PROP_STRING("ibdev", PVRDMADev, backend_device_name),
     DEFINE_PROP_UINT8("ibport", PVRDMADev, backend_port_num, 1),
@@ -57,7 +57,6 @@ static const Property pvrdma_dev_properties[] = {
     DEFINE_PROP_INT32("dev-caps-max-ah", PVRDMADev, dev_attr.max_ah, MAX_AH),
     DEFINE_PROP_INT32("dev-caps-max-srq", PVRDMADev, dev_attr.max_srq, MAX_SRQ),
     DEFINE_PROP_CHR("mad-chardev", PVRDMADev, mad_chr),
-    { /* end of list */ },
 };
 
 static void pvrdma_format_statistics(RdmaProvider *obj, GString *buf)
