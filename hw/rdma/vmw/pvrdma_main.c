@@ -40,7 +40,7 @@
 #include "standard-headers/drivers/infiniband/hw/vmw_pvrdma/pvrdma_dev_api.h"
 #include "pvrdma_qp_ops.h"
 
-static Property pvrdma_dev_properties[] = {
+static const Property pvrdma_dev_properties[] = {
     DEFINE_PROP_STRING("netdev", PVRDMADev, backend_eth_device_name),
     DEFINE_PROP_STRING("ibdev", PVRDMADev, backend_device_name),
     DEFINE_PROP_UINT8("ibport", PVRDMADev, backend_port_num, 1),

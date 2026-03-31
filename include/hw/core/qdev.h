@@ -955,7 +955,6 @@ char *qdev_get_own_fw_dev_path_from_handler(BusState *bus, DeviceState *dev);
         QEMU_BUILD_BUG_ON(sizeof(props) == 0);                          \
         size_t props_count_ = ARRAY_SIZE(props);                        \
         if ((props)[props_count_ - 1].name == NULL) {                   \
-	 	printf("DEBUG: %s:%d - (pros)[props_count_ - 1].name = %s \n", __func__, __LINE__, (props)[props_count_ - 1].name); \
             qemu_build_not_reached();                                   \
         }                                                               \
         device_class_set_props_n((dc), (props), props_count_);          \
